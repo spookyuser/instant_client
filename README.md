@@ -14,7 +14,7 @@ Typed, async Python client generator for InstantDB. You bring your own schema (f
 
 ### Install
 
-From github:
+From PyPI (recommended once published):
 
 ```bash
 pip install instant-client
@@ -64,10 +64,6 @@ Optional flags (future-friendly):
 - `--out-dir`: customize output directory (default: `src/generated_instant_client`)
 - `--base-url`: override API base (default: env `INSTANT_BASE_URL` or `https://api.instantdb.com`)
 - `--app-id`, `--admin-token`: override env vars
-
-Planned additions:
-
-- `instant schema export > schema.json` + `instant generate --from-schema schema.json` for offline/CI reproducibility.
 
 ### Use the generated client
 
