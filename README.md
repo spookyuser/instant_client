@@ -1,4 +1,4 @@
-## instant-client (async-only)
+## instant-client
 
 Typed, async Python client generator for InstantDB. You bring your own schema (from your Instant app), and this tool generates a strongly-typed Python client that you can commit to your repo or regenerate on demand. It also ships a minimal runtime. I just wanted something that i can do mutations with in python with some type safety and these are the first steps toward that. Also it was mostly 78 shotted with gpt-5.
 
