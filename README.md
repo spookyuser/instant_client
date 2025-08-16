@@ -88,6 +88,8 @@ expand_spec: PostExpandSpec = {"author": {}, "comments": {"author": {}}}
 posts = await client.posts.find(expand=expand_spec)
 ```
 
+see [example](examples/demo.py)
+
 ### Optional: end-to-end test flow (JS ↔ Python)
 
 The tests perform this flow:
