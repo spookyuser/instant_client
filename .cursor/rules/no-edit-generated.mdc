@@ -1,0 +1,18 @@
+---
+alwaysApply: true
+---
+
+# Generated Code Policy
+
+The directory `src/instant_client/generated/` contains auto-generated code.
+
+- Do not edit files under `src/instant_client/generated/`. Treat them as read-only.
+- Ignore lints, formatting, and type errors in generated files. Do not run or fix lints for these files.
+- To change behavior or types, make edits in the generator and templates, then regenerate:
+  - [codegen.py](mdc:src/instant_client/generator/codegen.py)
+  - [client.py.j2](mdc:src/instant_client/generator/templates/client.py.j2)
+  - [models.py.j2](mdc:src/instant_client/generator/templates/models.py.j2)
+  - [**init**.py.j2](mdc:src/instant_client/generator/templates/__init__.py.j2)
+  - CLI entry: [cli.py](mdc:src/instant_client/cli.py)
+
+After updating templates/codegen, regenerate the client with the CLI (e.g., `instant generate`) rather than touching generated files directly.

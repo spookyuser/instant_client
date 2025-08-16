@@ -1,0 +1,19 @@
+{
+  "name": "instant-client",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@faker-js/faker": "^9.9.0",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@dotenvx/dotenvx": "^1.48.4",
+    "@instantdb/admin": "^0.20.28",
+    "@instantdb/core": "^0.20.28",
+    "instant-cli": "^0.20.28"
+  }
+}

@@ -1,0 +1,220 @@
+from __future__ import annotations
+from typing import Any, Optional, Dict, Type, List, Mapping, Sequence, Union, overload
+from pydantic import BaseModel
+from instant_client.runtime.core import AsyncClient
+from .models import *
+from dataclasses import dataclass
+import uuid
+
+# Auto-generated relations map: entity name -> {relation_field: target_class_name}
+RELATIONS_MAP: Dict[str, Dict[str, str]] = {
+{% for e in entities %}
+    "{{e.name}}": {
+    {% for r in e.relations or [] %}
+        "{{r.py_name}}": "{{r.target_class}}"{% if not loop.last %},{% endif %}
+    {% endfor %}
+    },
+{% endfor %}
+}
+
+def _normalize_relations(obj: Dict[str, Any], entity_name: str) -> None:
+    rels = RELATIONS_MAP.get(entity_name) or {}
+    for field_name, target_class in rels.items():
+        if field_name not in obj:
+            continue
+        value = obj[field_name]
+        if value is None:
+            continue
+        # One relations may arrive as a single id; expanded relations always as lists
+        if isinstance(value, str):
+            obj[field_name] = [{"id": value}]
+            continue
+        if isinstance(value, dict):
+            # Be tolerant: treat as single expanded object
+            value = [value]
+        if isinstance(value, list):
+            normalized_list: List[Dict[str, Any]] = []
+            for item in value:
+                if isinstance(item, str):
+                    normalized_list.append({"id": item})
+                elif isinstance(item, dict):
+                    # Recurse into nested relations for the target entity
+                    _normalize_relations(item, _entity_name_from_class(target_class))
+                    normalized_list.append(item)
+                else:
+                    # Unknown type; attempt best-effort cast to dict
+                    normalized_list.append({"id": item})
+            obj[field_name] = normalized_list
+
+_CLASS_TO_ENTITY: Dict[str, str] = {
+{% for e in entities %}
+    "{{e.class_name}}": "{{e.name}}"{% if not loop.last %},{% endif %}
+{% endfor %}
+}
+
+def _entity_name_from_class(class_name: str) -> str:
+    return _CLASS_TO_ENTITY.get(class_name, class_name)
+
+@dataclass
+class _EntityService:
+    name: str
+    client: AsyncClient
+    model: Type[BaseModel]
+    expand_keys: frozenset[str]
+    relations_spec: Dict[str, str]
+
+    def _shape(self, where: Mapping[str, Any] | None, expand: Union[Sequence[str], Dict[str, Any], None]) -> Dict[str, Any]:
+        shape: Dict[str, Any] = {self.name: {}}
+        if where:
+            shape[self.name]["$"] = {"where": where}
+        if expand:
+            root = shape[self.name]
+            def add_path(path: str) -> None:
+                if not isinstance(path, str) or not path:
+                    return
+                segments = path.split(".")
+                first = segments[0]
+                if first not in self.expand_keys:
+                    raise ValueError(f"Illegal expand key {first} for {self.name}")
+                node = root.setdefault(first, {})
+                target_class = self.relations_spec.get(first)
+                current_entity = _entity_name_from_class(target_class) if target_class else None
+                for seg in segments[1:]:
+                    if not current_entity:
+                        raise ValueError(f"Cannot expand '{path}': unknown relation after '{first}'")
+                    rels = RELATIONS_MAP.get(current_entity, {})
+                    if seg not in rels:
+                        raise ValueError(f"Illegal nested expand '{seg}' under '{current_entity}' in '{path}'")
+                    node = node.setdefault(seg, {})
+                    current_entity = _entity_name_from_class(rels[seg])
+
+            def add_spec(spec: Dict[str, Any], entity: str, parent: Dict[str, Any]) -> None:
+                rels = RELATIONS_MAP.get(entity, {})
+                for k, v in spec.items():
+                    if k not in rels:
+                        raise ValueError(f"Illegal expand key {k} for {entity}")
+                    child_node = parent.setdefault(k, {})
+                    next_entity = _entity_name_from_class(rels[k])
+                    if isinstance(v, dict) and next_entity:
+                        add_spec(v, next_entity, child_node)
+
+            if isinstance(expand, dict):
+                add_spec(expand, self.name, root)
+            else:
+                for path in expand:
+                    add_path(path)
+        return shape
+
+    def build_shape(self, *, where: Mapping[str, Any] | None = None, expand: Union[Sequence[str], Dict[str, Any], None] = None) -> Dict[str, Any]:
+        return self._shape(where, expand)
+
+    async def _create(self, payload: Dict[str, Any]) -> str:
+        new_id = payload.get("id") or str(uuid.uuid4())
+        payload["id"] = new_id
+        tx = [["update", self.name, new_id, payload]]
+        resp = await self.client.transact(tx)
+        return (resp.get("ids") or [new_id])[0]
+
+    async def _update(self, id: str, payload: Dict[str, Any]) -> None:
+        tx = [["update", self.name, id, payload]]
+        await self.client.transact(tx)
+
+    async def _delete(self, id: str) -> None:
+        tx = [["delete", self.name, id]]
+        await self.client.transact(tx)
+
+    async def _link(self, id: str, edge: Dict[str, str]) -> None:
+        tx = [["link", self.name, id, edge]]
+        await self.client.transact(tx)
+
+{% for e in entities %}
+class {{e.class_name}}Service(_EntityService):
+    {% if e.expand_alias %}
+    @overload
+    async def find(
+        self,
+        *,
+        where: {{e.class_name}}Where | None = None,
+        expand: {{e.class_name}}ExpandSpec,
+        validate: bool = True,
+    ) -> List[{{e.class_name}}]:
+        ...
+
+    @overload
+    async def find(
+        self,
+        *,
+        where: {{e.class_name}}Where | None = None,
+        expand: List[{{e.expand_alias}} | str] | None = None,
+        validate: bool = True,
+    ) -> List[{{e.class_name}}]:
+        ...
+    {% endif %}
+    async def find(
+        self,
+        *,
+        where: {{e.class_name}}Where | None = None,
+        {% if e.expand_alias %}expand: Union[List[{{e.expand_alias}} | str], {{e.class_name}}ExpandSpec, None] = None,{% else %}expand: Union[List[str], Dict[str, Any], None] = None,{% endif %}
+        validate: bool = True,
+    ) -> List[{{e.class_name}}]:
+        shape = self._shape(where, expand)
+        data = (await self.client.query(shape)).get(self.name, [])
+        if validate:
+            for x in data:
+                if isinstance(x, dict):
+                    _normalize_relations(x, self.name)
+        return [self.model.model_validate(x) for x in data] if validate else data  # type: ignore[return-value]
+
+    async def create(self, data: {{e.class_name}}Create) -> str:
+        payload = data.model_dump(mode="json", exclude_none=True)
+        return await self._create(payload)
+
+    async def update(self, id: str, data: {{e.class_name}}Update) -> None:
+        payload = data.model_dump(mode="json", exclude_none=True)
+        await self._update(id, payload)
+
+    async def delete(self, id: str) -> None:
+        await self._delete(id)
+
+    {% if e.link_keys %}
+    async def link(self, id: str{% if e.link_keys %}, *{% endif %}{% for k in e.link_keys %}, {{k}}: Optional[str] = None{% endfor %}) -> None:
+        edge: Dict[str, str] = {}
+        {% for k in e.link_keys %}
+        if {{k}} is not None:
+            edge["{{k}}"] = {{k}}
+        {% endfor %}
+        if len(edge) != 1:
+            raise ValueError("link() requires exactly one relation keyword argument for {{e.name}}")
+        await self._link(id, edge)
+    {% endif %}
+
+{% endfor %}
+
+class Client(AsyncClient):
+    def __init__(
+        self,
+        app_id: str,
+        admin_token: str,
+        *,
+        base_url: str = "https://api.instantdb.com",
+        timeout: float = 30.0,
+        max_retries: int = 0,
+        backoff_factor: float = 0.5,
+    ):
+        super().__init__(
+            app_id,
+            admin_token,
+            base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            backoff_factor=backoff_factor,
+        )
+{% for e in entities %}
+        self.{{e.py_name}} = {{e.class_name}}Service(
+            "{{e.name}}",
+            self,
+            {{e.class_name}},
+            frozenset({% if e.expand_keys %}{ {% for k in e.expand_keys %}"{{k}}"{% if not loop.last %}, {% endif %}{% endfor %} }{% else %}(){% endif %}),
+            RELATIONS_MAP.get("{{e.name}}", {}),
+        )
+{% endfor %}

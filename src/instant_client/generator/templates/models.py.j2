@@ -1,0 +1,59 @@
+from __future__ import annotations
+from typing import Any, Optional, List, Dict, TypedDict, Literal
+from datetime import datetime
+from pydantic import ConfigDict, BaseModel
+
+{% for e in entities %}
+class {{e.class_name}}(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+{% for a in e.attrs %}
+    {{a.py_name}}: {{ "Optional[" + a.py_type + "]" if not a.required else a.py_type }}{{ " = None" if not a.required else "" }}
+{% endfor %}
+{% if e.relations %}
+    # relations
+{% for r in e.relations %}
+    {{r.py_name}}: Optional[List[{{r.target_class}}]] = None
+{% endfor %}
+{% endif %}
+
+
+class {{e.class_name}}Create(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+{% for f in e.create_fields %}
+    {{f.py_name}}: {{ f.py_type if f.required else "Optional[" + f.py_type + "]" }}{{ "" if f.required else " = None" }}
+{% endfor %}
+
+
+class {{e.class_name}}Update(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+{% for f in e.update_fields %}
+    {{f.py_name}}: Optional[{{f.py_type}}] = None
+{% endfor %}
+
+
+class {{e.class_name}}Where(TypedDict, total=False):
+{% for f in e.where_fields %}
+    {{f.py_name}}: {{f.py_type}}
+{% endfor %}
+
+
+{% if e.expand_alias %}
+{{e.class_name}}ExpandKey = Literal[{% for k in e.expand_keys %}"{{k}}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% endif %}
+
+{% if e.relations %}
+class {{e.class_name}}ExpandSpec(TypedDict, total=False):
+{% for r in e.relations %}
+    {{r.py_name}}: "{{r.target_class}}ExpandSpec"
+{% endfor %}
+{% endif %}
+
+{% if e.link_keys %}
+{{e.class_name}}LinkKey = Literal[{% for k in e.link_keys %}"{{k}}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% endif %}
+
+{% endfor %}
+
+{% for e in entities %}
+{{e.class_name}}.model_rebuild()
+{% endfor %}
