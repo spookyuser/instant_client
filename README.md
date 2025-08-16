@@ -14,10 +14,10 @@ Typed, async Python client generator for InstantDB. You bring your own schema (f
 
 ### Install
 
-From PyPI (recommended once published):
+
 
 ```bash
-pip install instant-client
+uv add git+https://github.com/spookyuser/instant_client
 ```
 
 ### Prerequisites
