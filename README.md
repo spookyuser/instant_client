@@ -1,6 +1,6 @@
 ## instant-client
 
-I just wanted something that i can do mutations with in python with some type safety and these are the first steps toward that. Also it was mostly 78 shotted with gpt-5.
+I just wanted something that i can do mutations with in python with some type safety and these are the first steps toward that. Also it was mostly 78 shotted with gpt-5. If you have any ideas please feel free to make a pr or issue or discussion, there are so many things that can be improved here and i doubt this is the best way of doing this.
 
 ### How it works
 
